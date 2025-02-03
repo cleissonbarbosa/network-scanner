@@ -8,6 +8,11 @@ import Control.Exception (try, IOException)
 import Control.Concurrent.Async (mapConcurrently)
 import System.IO (writeFile)
 import Data.Time (getCurrentTime)
+import System.Process (readProcess)
+import System.Info (os)
+import Data.List (isPrefixOf)
+import Data.Char (isDigit)
+import Text.Read (readMaybe)
 
 -- Escanear uma porta específica e retornar o resultado como String
 scanPort :: HostName -> PortNumber -> IO String
@@ -49,6 +54,33 @@ detectService 21    = "FTP"
 detectService 8080  = "HTTP-Alt"
 detectService _     = "Unknown Service"
 
+-- Extrair TTL do output do ping
+extractTTL :: String -> Maybe Int
+extractTTL output =
+    let ttlStrs = [ drop 4 word | word <- words output, "TTL=" `isPrefixOf` word || "ttl=" `isPrefixOf` word ]
+    in case ttlStrs of
+         (x:_) -> readMaybe (takeWhile isDigit x)
+         _     -> Nothing
+
+-- Realiza fingerprinting do SO utilizando o TTL do comando ping, funcionando em Windows e Linux
+fingerprintOS :: HostName -> IO String
+fingerprintOS host = do
+    let (flag, count) = if os == "mingw32" || os == "win32"
+                           then ("-n", "1")
+                           else ("-c", "1")
+    output <- readProcess "ping" [flag, count, host] ""
+    case extractTTL output of
+        Just ttl -> return $ "OS Fingerprint based on TTL (" ++ show ttl ++ "): " ++ osGuess ttl
+        Nothing  -> return "OS Fingerprint: Unable to determine TTL."
+
+-- Adivinha o SO com base no valor TTL
+osGuess :: Int -> String
+osGuess ttl
+    | ttl >= 128 && ttl < 130 = "Windows"
+    | ttl == 64               = "Linux/Unix"
+    | ttl >= 254              = "Network device or router"
+    | otherwise               = "Unknown OS"
+
 -- Função principal
 main :: IO ()
 main = do
@@ -59,10 +91,14 @@ main = do
     let ports = singlePorts ++ rangePorts
     -- Escaneia de forma concorrente
     results <- mapConcurrently (scanPort host) ports
-    -- Imprime os resultados no console
-    mapM_ putStrLn results
     -- Obter data e hora atuais
     time <- getCurrentTime
     let reportHeader = "Scan report generated at: " ++ show time ++ "\n\n"
-    -- Gera relatório em arquivo com data e hora
-    writeFile "scan_report.txt" (reportHeader ++ unlines results)
+    -- Realiza fingerprinting do SO
+    osFingerprint <- fingerprintOS host
+    -- Imprime os resultados no console
+    mapM_ putStrLn results
+    putStrLn osFingerprint
+    -- Gera relatório em arquivo com data, hora e fingerprinting do SO
+    let fullReport = reportHeader ++ unlines results ++ "\n" ++ osFingerprint
+    writeFile "scan_report.txt" fullReport

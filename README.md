@@ -40,12 +40,12 @@ By default, the application scans the localhost (`127.0.0.1`) for the specified 
 ## Project Structure
 
 ```
-haskell-scan-app
+network-scanner
 ├── src
 │   ├── Main.hs            # Entry point of the application
 │   ├── Scanner.hs         # Functions related to port scanning
 │   └── OSFingerprint.hs    # Functions for OS fingerprinting
-├── haskell-scan-app.cabal # Project configuration file
+├── network-scanner.cabal # Project configuration file
 └── README.md              # Documentation for the project
 ```
 

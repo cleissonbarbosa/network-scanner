@@ -45,6 +45,8 @@ library
 executable network-scanner-exe
   main-is: Main.hs
   other-modules:
+      OSFingerprint
+      Scanner
       Paths_network_scanner
   autogen-modules:
       Paths_network_scanner

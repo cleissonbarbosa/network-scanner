@@ -5,6 +5,8 @@ import Data.Time (getCurrentTime, defaultTimeLocale, formatTime)
 import Scanner (scanPortWithTimeout)
 import OSFingerprint (fingerprintOS)
 import Logger (LogLevel(..), logMessage)
+import SNMPScanner (snmpDiscoverNetwork, formatDeviceInfo, generateTopologyMap, nodeInfo)
+import NetworkDiscovery (discoverActiveHosts)
 
 -- Função principal
 main :: IO ()
@@ -40,6 +42,21 @@ main = do
     logMessage INFO "Realizando fingerprinting do sistema operacional..."
     osFingerprint <- fingerprintOS host
     
+    -- Realiza descoberta SNMP da rede
+    logMessage INFO "Iniciando descoberta SNMP da rede..."
+    
+    -- Descobrir hosts ativos na rede local
+    activeHosts <- discoverActiveHosts host
+    let uniqueHosts = removeDuplicates (host : activeHosts)  -- Evitar duplicatas
+    
+    topologyNodes <- snmpDiscoverNetwork uniqueHosts
+    
+    -- Gerar informações detalhadas dos dispositivos
+    let deviceDetails = concatMap formatDeviceInfo (map nodeInfo topologyNodes)
+    
+    -- Gerar mapa de topologia
+    let topologyMap = generateTopologyMap topologyNodes
+    
     -- Separa portas abertas e fechadas
     let openPorts = filter (elem '✓') results
     let closedPorts = filter (elem '✗') results
@@ -55,6 +72,13 @@ main = do
     
     putStrLn $ "\n" ++ osFingerprint
     
+    -- Exibir informações SNMP dos dispositivos
+    putStrLn "\n=== INFORMAÇÕES DOS DISPOSITIVOS (SNMP) ==="
+    putStrLn deviceDetails
+    
+    -- Exibir mapa de topologia
+    putStrLn topologyMap
+    
     -- Gera relatório detalhado em arquivo
     let fullReport = reportHeader ++ 
                     "\nPORTAS ABERTAS (" ++ show (length openPorts) ++ "):\n" ++
@@ -63,8 +87,17 @@ main = do
                     unlines closedPorts ++
                     "\nSISTEMA OPERACIONAL:\n" ++
                     osFingerprint ++ "\n" ++
+                    "\nINFORMAÇÕES DOS DISPOSITIVOS (SNMP):\n" ++
+                    deviceDetails ++
+                    "\nTOPOLOGIA DA REDE:\n" ++
+                    topologyMap ++
                     "\n=== END OF REPORT ==="
     
     writeFile "detailed_scan_report.txt" fullReport
     logMessage INFO "Relatório detalhado salvo em 'detailed_scan_report.txt'"
     logMessage INFO "Scan concluído com sucesso!"
+
+-- Remover duplicatas de uma lista
+removeDuplicates :: Eq a => [a] -> [a]
+removeDuplicates [] = []
+removeDuplicates (x:xs) = x : removeDuplicates (filter (/= x) xs)

@@ -26,6 +26,9 @@ dependencies:
 - async
 - time
 - process
+- snmp
+- containers
+- text
 
 ghc-options:
 - -Wall

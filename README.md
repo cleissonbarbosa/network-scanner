@@ -6,12 +6,16 @@ This project is a simple Haskell application that scans specified ports on a giv
 
 - **Concurrent Port Scanning**: Uses async for high-performance concurrent scanning with configurable timeouts
 - **Enhanced Service Detection**: Identifies services running on 18+ common ports including web servers, databases, and remote access services
+- **SNMP Network Discovery**: Automatically discovers and analyzes network devices with detailed device information and topology mapping
+- **Network Topology Mapping**: Creates comprehensive network maps showing device relationships and network segments
 - **Intelligent Port Ranges**: Scans common ports (SSH, HTTP, HTTPS, FTP, etc.) plus configurable custom ranges
 - **Structured Logging**: Provides timestamped logs with different levels (INFO, DEBUG, ERROR) for better troubleshooting
-- **Detailed Reporting**: Generates both console output and detailed text reports with scan statistics
+- **Detailed Reporting**: Generates both console output and detailed text reports with scan statistics, device information, and topology maps
 - **OS Fingerprinting**: Identifies target operating system based on TTL values from ping responses
+- **Active Host Discovery**: Automatically discovers active hosts in network segments
+- **Device Classification**: Intelligently categorizes devices (Linux servers, Windows workstations, web servers, databases, etc.)
 - **Timeout Management**: Prevents hanging connections with configurable timeout handling
-- **Clean Output Format**: Uses visual indicators (✓/✗) to clearly show open/closed ports
+- **Clean Output Format**: Uses visual indicators (✓/✗) to clearly show open/closed ports and device status
 - Written in pure Haskell using the `network` library
 
 ## Prerequisites
@@ -39,24 +43,56 @@ Run the executable:
 stack exec network-scanner-exe
 ```
 
-By default, the application scans the localhost (`127.0.0.1`) for common ports including:
+By default, the application scans the localhost (`127.0.0.1`) for common ports and performs comprehensive network analysis including:
+
+### Port Scanning
 - Web services (HTTP/HTTPS on ports 80, 443, 8080, 8443)
 - Remote access (SSH on 22, RDP on 3389, VNC on 5900)  
 - Email services (SMTP, POP3, IMAP)
 - Database services (MySQL, PostgreSQL)
 - Custom port ranges (currently 75-85)
 
-The scanner provides detailed logging, generates comprehensive reports, and performs OS fingerprinting.
+### SNMP Network Discovery
+- Automatic discovery of active hosts in the network segment
+- Device classification based on open services and fingerprinting
+- Detailed device information collection (system name, description, uptime, contact, location)
+- Network topology mapping with inferred connections
+- Support for various device types: Linux/Windows servers, web servers, database servers, network devices
+
+### Comprehensive Reporting
+The scanner generates detailed reports including:
+- Port scan results with service identification
+- OS fingerprinting information
+- SNMP device discovery results
+- Network topology map with device relationships
+- Summary statistics and device categorization
+
+Example output:
+```
+📡 DISPOSITIVO: 192.168.1.10 (Linux LAMP Server)
+   Nome: webserver01
+   Descrição: Linux LAMP Server (SSH + HTTP + HTTPS detected)
+   Uptime: 15 days, 4 hours, 32 minutes
+   Contato: admin@192.168.1.10
+   Localização: Network Segment
+
+🗺️  MAPA DE TOPOLOGIA DA REDE
+🔗 192.168.1.10 (Linux Server) - webserver01
+  192.168.1.10 <--> Web-DMZ
+  192.168.1.10 <--> Admin-Network
+```
 
 ## Project Structure
 
 ```
 network-scanner
 ├── app
-│   ├── Main.hs            # Entry point with enhanced logging and reporting
+│   ├── Main.hs            # Entry point with SNMP integration and enhanced reporting
 │   ├── Scanner.hs         # Port scanning with timeout and service detection  
 │   ├── OSFingerprint.hs   # OS fingerprinting functionality
-│   └── Logger.hs          # Structured logging system
+│   ├── Logger.hs          # Structured logging system
+│   ├── SNMPScanner.hs     # SNMP device discovery and topology mapping
+│   └── NetworkDiscovery.hs # Active host discovery and network analysis
 ├── src
 │   └── Lib.hs            # Library module
 ├── network-scanner.cabal # Project configuration file
@@ -68,6 +104,11 @@ network-scanner
 - base >= 4.7 && < 5
 - network
 - bytestring
+- async
+- time
+- process
+- containers
+- text
 
 ## License
 

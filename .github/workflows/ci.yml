@@ -1,0 +1,131 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Haskell Stack
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: '9.4.8'
+          stack-version: 'latest'
+
+      - name: Cache Stack dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.stack
+            .stack-work
+          key: ${{ runner.os }}-stack-${{ hashFiles('stack.yaml', 'package.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-stack-
+
+      - name: Install system dependencies (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsnmp-dev libsnmp40
+
+      - name: Install system dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install net-snmp
+
+      - name: Install system dependencies (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          # Windows SNMP libraries are typically pre-installed
+          echo "Windows SNMP support via system libraries"
+
+      - name: Build project
+        run: |
+          stack build
+
+      - name: Run tests
+        run: |
+          stack test
+
+      - name: Build binary
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          stack build --copy-bins --local-bin-path ./bin
+          ls -la bin/
+
+  auto-version:
+    name: Auto Version Bump
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install semantic-release
+        run: |
+          npm install -g @semantic-release/git @semantic-release/github @semantic-release/changelog semantic-release @semantic-release/exec
+
+      - name: Setup Haskell Stack
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: '9.4.8'
+          stack-version: 'latest'
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Run semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cat > .releaserc.json << 'EOF'
+          {
+            "branches": ["main"],
+            "plugins": [
+              "@semantic-release/commit-analyzer",
+              "@semantic-release/release-notes-generator",
+              "@semantic-release/changelog",
+              [
+                "@semantic-release/exec",
+                {
+                  "prepareCmd": "sed -i 's/version:.*$/version: ${nextRelease.version}/' package.yaml"
+                }
+              ],
+              [
+                "@semantic-release/git",
+                {
+                  "assets": ["package.yaml", "CHANGELOG.md"],
+                  "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
+                }
+              ],
+              "@semantic-release/github"
+            ],
+            "preset": "conventionalcommits"
+          }
+          EOF
+          
+          semantic-release

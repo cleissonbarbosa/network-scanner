@@ -27,6 +27,27 @@ To build and run this project, you need:
 
 ## Installation
 
+### Option 1: Download Pre-built Binaries (Recommended)
+
+Download the latest release for your platform from the [Releases page](https://github.com/cleissonbarbosa/network-scanner/releases):
+
+- **Linux**: `network-scanner-linux-amd64.tar.gz`
+- **macOS**: `network-scanner-macos-amd64.tar.gz`
+- **Windows**: `network-scanner-windows-amd64.exe.zip`
+
+Extract and run:
+```sh
+# Linux/macOS
+tar -xzf network-scanner-linux-amd64.tar.gz
+chmod +x network-scanner-linux-amd64
+./network-scanner-linux-amd64
+
+# Windows
+# Extract the ZIP file and run network-scanner-windows-amd64.exe
+```
+
+### Option 2: Build from Source
+
 Clone the repository and build the project:
 
 ```sh
@@ -37,6 +58,17 @@ stack build
 
 ## Usage
 
+### Using Pre-built Binary
+Run the downloaded executable:
+```sh
+# Linux/macOS
+./network-scanner-linux-amd64
+
+# Windows
+network-scanner-windows-amd64.exe
+```
+
+### Using Source Build
 Run the executable:
 
 ```sh
@@ -118,6 +150,22 @@ This project is licensed under the BSD-3-Clause License - see the [LICENSE](LICE
 
 1. Fork the Project
 2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+3. Commit your Changes using conventional commits (`git commit -m 'feat: add some amazing feature'`)
 4. Push to the Branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
+
+### Releases
+
+This project uses automated semantic versioning. When changes are merged to `main`, the CI automatically:
+- Analyzes commit messages for version bumps
+- Updates version in `package.yaml`
+- Creates git tags
+- Builds binaries for Linux, macOS, and Windows
+- Publishes releases with downloadable binaries
+
+Use conventional commit messages:
+- `feat:` for new features (minor bump)
+- `fix:` for bug fixes (patch bump)
+- `feat!:` or `fix!:` for breaking changes (major bump)
+
+See [RELEASE.md](RELEASE.md) for detailed release instructions.

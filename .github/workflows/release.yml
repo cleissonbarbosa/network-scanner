@@ -1,0 +1,198 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., v1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: network-scanner-exe
+            asset_name: network-scanner-linux-amd64
+          - os: windows-latest
+            artifact_name: network-scanner-exe.exe
+            asset_name: network-scanner-windows-amd64.exe
+          - os: macos-latest
+            artifact_name: network-scanner-exe
+            asset_name: network-scanner-macos-amd64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Haskell Stack
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: '9.4.8'
+          stack-version: 'latest'
+
+      - name: Cache Stack dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.stack
+            .stack-work
+          key: ${{ runner.os }}-stack-${{ hashFiles('stack.yaml', 'package.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-stack-
+
+      - name: Install system dependencies (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsnmp-dev libsnmp40
+
+      - name: Install system dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install net-snmp
+
+      - name: Install system dependencies (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          # Windows SNMP libraries are typically pre-installed
+          echo "Windows SNMP support via system libraries"
+
+      - name: Build project
+        run: |
+          stack build --copy-bins --local-bin-path ./bin
+
+      - name: Test build
+        run: |
+          stack test
+
+      - name: Prepare binary
+        shell: bash
+        run: |
+          mkdir -p release
+          cp bin/${{ matrix.artifact_name }} release/${{ matrix.asset_name }}
+          
+      - name: Create archive (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          cd release
+          tar -czf ${{ matrix.asset_name }}.tar.gz ${{ matrix.asset_name }}
+          
+      - name: Create archive (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          cd release
+          7z a ${{ matrix.asset_name }}.zip ${{ matrix.asset_name }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.asset_name }}
+          path: |
+            release/${{ matrix.asset_name }}.*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      - name: Extract version from tag or input
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION=${GITHUB_REF#refs/tags/}
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Generate changelog from commits since last tag
+          LAST_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+          if [ -n "$LAST_TAG" ]; then
+            CHANGELOG=$(git log $LAST_TAG..HEAD --pretty=format:"* %s (%h)" --no-merges)
+          else
+            CHANGELOG="* Initial release"
+          fi
+          
+          cat > RELEASE_CHANGELOG.md << EOF
+          # Release ${{ steps.version.outputs.version }}
+          
+          ## Changes
+          $CHANGELOG
+          
+          ## Assets
+          Download the appropriate binary for your platform:
+          - **Linux**: \`network-scanner-linux-amd64.tar.gz\`
+          - **macOS**: \`network-scanner-macos-amd64.tar.gz\`
+          - **Windows**: \`network-scanner-windows-amd64.exe.zip\`
+          
+          ## Installation
+          1. Download the binary for your platform
+          2. Extract the archive (Linux/macOS) or ZIP file (Windows)
+          3. Make the binary executable: \`chmod +x network-scanner-*\` (Unix systems)
+          4. Run: \`./network-scanner-exe --help\`
+          EOF
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          release_name: Network Scanner ${{ steps.version.outputs.version }}
+          body_path: RELEASE_CHANGELOG.md
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, 'alpha') || contains(steps.version.outputs.version, 'beta') || contains(steps.version.outputs.version, 'rc') }}
+
+      - name: Upload Linux Binary
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: artifacts/network-scanner-linux-amd64/network-scanner-linux-amd64.tar.gz
+          asset_name: network-scanner-linux-amd64.tar.gz
+          asset_content_type: application/gzip
+
+      - name: Upload macOS Binary
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: artifacts/network-scanner-macos-amd64/network-scanner-macos-amd64.tar.gz
+          asset_name: network-scanner-macos-amd64.tar.gz
+          asset_content_type: application/gzip
+
+      - name: Upload Windows Binary
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: artifacts/network-scanner-windows-amd64.exe/network-scanner-windows-amd64.exe.zip
+          asset_name: network-scanner-windows-amd64.exe.zip
+          asset_content_type: application/zip

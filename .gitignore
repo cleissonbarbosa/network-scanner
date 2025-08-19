@@ -8,3 +8,9 @@ dist-newstyle/
 cabal.sandbox.config
 cabal-dev
 dist/
+bin/
+release/
+artifacts/
+node_modules/
+.releaserc.json
+RELEASE_CHANGELOG.md

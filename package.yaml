@@ -26,6 +26,8 @@ dependencies:
 - async
 - time
 - process
+- containers
+- text
 
 ghc-options:
 - -Wall

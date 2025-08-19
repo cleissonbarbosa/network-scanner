@@ -37,6 +37,8 @@ jobs:
         with:
           ghc-version: '9.4.8'
           stack-version: 'latest'
+          enable-stack: true
+          stack-no-global: true
 
       - name: Cache Stack dependencies
         uses: actions/cache@v3
@@ -52,25 +54,33 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libsnmp-dev libsnmp40
 
       - name: Install system dependencies (macOS)
         if: matrix.os == 'macos-latest'
         run: |
-          brew install net-snmp
+          # Ensure Stack is in PATH 
+          export PATH="$HOME/.local/bin:$PATH"
+          if ! command -v stack &> /dev/null; then
+            echo "Installing Stack via curl..."
+            curl -sSL https://get.haskellstack.org/ | sh
+          fi
 
       - name: Install system dependencies (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          # Windows SNMP libraries are typically pre-installed
-          echo "Windows SNMP support via system libraries"
+          echo "No additional system dependencies needed"
 
       - name: Build project
         run: |
+          # Ensure Stack is available
+          export PATH="$HOME/.local/bin:$PATH"
+          stack --version
           stack build --copy-bins --local-bin-path ./bin
 
       - name: Test build
         run: |
+          # Ensure Stack is available
+          export PATH="$HOME/.local/bin:$PATH"
           stack test
 
       - name: Prepare binary
